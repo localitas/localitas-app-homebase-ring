@@ -57,3 +57,24 @@ Homebase pushes the credential to homebase-ring, which authenticates with Ring's
 **"oauth failed with status 412"** — Ring is requesting 2FA. Run `./bin/homebase-ring-server auth` again and complete the 2FA challenge.
 
 **Devices not appearing** — Homebase syncs plugin devices every 60 seconds. Check that homebase-ring is healthy: `curl http://localhost:9223/health.json`.
+
+## App Store
+
+Install via the Localitas App Store (recommended):
+
+```bash
+localitas-core app-store add --name homebase-ring --compose ./docker-compose.yml --port 9223
+localitas-core app-store start homebase-ring
+```
+
+Or open the App Store UI (package icon, top-right nav) and paste the `docker-compose.yml`.
+
+The image is published to `ghcr.io/localitas/localitas-app-homebase-ring:latest`. To publish a new version:
+
+```bash
+make docker-push   # runs tests, builds, and pushes to ghcr.io
+```
+
+## License
+
+MIT
