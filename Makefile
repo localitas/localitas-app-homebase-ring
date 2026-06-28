@@ -1,5 +1,6 @@
 .PHONY: build test install uninstall start stop restart status logs logs-err \
-       lint strict-lint
+       build-docker start-docker stop-docker restart-docker logs-docker \
+       docker-push lint strict-lint
 
 APP_NAME := homebase-ring
 PORT ?= 9223
@@ -70,10 +71,37 @@ logs:
 logs-err:
 	@tail -f $(LOG_DIR)/stderr.log
 
-# ── Release ───────────────────────────────────────────────────
+# ── Docker ────────────────────────────────────────────────────
+
+build-docker: build-linux
+	docker build -t homebase-ring:latest .
+
+start-docker: build-docker stop-docker
+	@docker run -d -p $(PORT):8000 --name homebase-ring \
+		--log-opt max-size=10m --log-opt max-file=7 \
+		homebase-ring:latest
+	@echo "homebase-ring running in Docker on port $(PORT)"
+
+stop-docker:
+	@docker rm -f homebase-ring 2>/dev/null || true
+
+restart-docker: stop-docker start-docker
+
+logs-docker:
+	@docker logs -f homebase-ring
+
+# ── Release & Registry ────────────────────────────────────────
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GHCR_IMAGE := ghcr.io/localitas/localitas-app-$(APP_NAME)
+
+docker-push: test build-docker
+	docker tag $(APP_NAME):latest $(GHCR_IMAGE):latest
+	docker tag $(APP_NAME):latest $(GHCR_IMAGE):$(VERSION)
+	docker push $(GHCR_IMAGE):latest
+	docker push $(GHCR_IMAGE):$(VERSION)
+	@echo "✅ Pushed $(GHCR_IMAGE):latest and $(GHCR_IMAGE):$(VERSION)"
 
 build-release: lint
 	@mkdir -p dist
