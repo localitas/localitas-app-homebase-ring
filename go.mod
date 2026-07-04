@@ -8,6 +8,8 @@ require (
 	github.com/urfave/cli/v3 v3.9.1
 )
 
+replace github.com/localitas/localitas-go => /Users/didipkerabat/localitas-go
+
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -15,4 +17,5 @@ require (
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
