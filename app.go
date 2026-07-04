@@ -3,7 +3,7 @@ package ring
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -19,6 +19,8 @@ type AppHealth struct {
 	PluginType  string `json:"plugin_type"`
 	PluginFor   string `json:"plugin_for"`
 }
+
+var logger = slog.Default().With("component", "homebase-ring")
 
 var DefaultHealth = AppHealth{
 	Name:        "homebase-ring",
@@ -59,11 +61,11 @@ func (a *App) Configure(ctx context.Context, vaultPublicID string) error {
 	if err := auth.LoadFromVault(ctx); err != nil {
 		return err
 	}
-	log.Printf("Ring credentials loaded from vault (credential: %s)", vaultPublicID)
+	logger.Info("ring credentials loaded from vault", "credential", vaultPublicID)
 
 	ringClient := NewRingClient(auth)
 	if err := ringClient.CreateSession(ctx); err != nil {
-		log.Printf("Ring session creation warning (non-fatal): %v", err)
+		logger.Warn("ring session creation warning (non-fatal)", "error", err)
 	}
 
 	a.Auth = auth

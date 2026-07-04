@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -78,7 +79,7 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 
 	app := ring.New(c, basePath, hardwareID)
 
-	log.Printf("homebase-ring started (unconfigured, waiting for POST /api/configure from Homebase)")
+	slog.Info("homebase-ring started, waiting for configuration", "endpoint", "POST /api/configure")
 
 	mux := http.NewServeMux()
 	app.RegisterRoutes(mux)
@@ -92,19 +93,19 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 
 	selfURL := fmt.Sprintf("http://localhost:%d", addr.Port)
 	if err := c.RegisterService(ctx, "homebase-ring", selfURL); err != nil {
-		log.Printf("service registry failed: %v", err)
+		slog.Warn("service registry failed", "error", err)
 	}
 
 	shutdown, err := ring.BroadcastMDNS(addr.Port, ring.DefaultHealth.Name)
 	if err != nil {
-		log.Printf("mDNS broadcast failed: %v", err)
+		slog.Warn("mDNS broadcast failed", "error", err)
 	}
 
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
-		log.Println("shutting down...")
+		slog.Info("shutting down")
 		if shutdown != nil {
 			shutdown()
 		}

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -168,7 +167,7 @@ func (a *RingAuth) refreshAccessToken(ctx context.Context) (string, error) {
 	newWrappedToken := encodeAuthConfig(a.config)
 	go a.updateVaultToken(newWrappedToken)
 
-	log.Printf("Ring auth refreshed, expires in %ds", tokenResp.ExpiresIn)
+	logger.Info("ring auth refreshed", "expires_in_seconds", tokenResp.ExpiresIn)
 	return a.accessToken, nil
 }
 
@@ -178,11 +177,11 @@ func (a *RingAuth) updateVaultToken(newToken string) {
 
 	secrets, err := a.vaultClient.VaultGetSecrets(ctx, a.vaultPublicID)
 	if err != nil {
-		log.Printf("ring auth: failed to read vault for token update: %v", err)
+		logger.Error("failed to read vault for token update", "error", err)
 		return
 	}
 	secrets[a.vaultSecretKey] = newToken
-	log.Printf("ring auth: updated refresh token in vault")
+	logger.Info("updated refresh token in vault")
 }
 
 func parseAuthConfig(raw string) *authConfig {
