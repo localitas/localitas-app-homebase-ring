@@ -122,19 +122,32 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health.json", HandleHealth)
 
 	// Read endpoints
-	mux.HandleFunc("GET /api/devices", h.handleListDevices)
-	mux.HandleFunc("GET /api/devices/{id}", h.handleGetDevice)
-	mux.HandleFunc("GET /api/devices/{id}/health", h.handleGetHealth)
-	mux.HandleFunc("GET /api/devices/{id}/snapshot", h.handleGetSnapshot)
+	mux.Handle("GET /api/devices", coreOrUser(client.ScopeRead, h.handleListDevices))
+	mux.Handle("GET /api/devices/{id}", coreOrUser(client.ScopeRead, h.handleGetDevice))
+	mux.Handle("GET /api/devices/{id}/health", coreOrUser(client.ScopeRead, h.handleGetHealth))
+	mux.Handle("GET /api/devices/{id}/snapshot", coreOrUser(client.ScopeRead, h.handleGetSnapshot))
 
 	// Write endpoints
-	mux.HandleFunc("POST /api/devices/{id}/command", client.RequireScopeFunc(client.ScopeWrite, h.handleCommand))
+	mux.Handle("POST /api/devices/{id}/command", coreOrUser(client.ScopeWrite, h.handleCommand))
 
 	// Admin endpoints
-	mux.HandleFunc("POST /api/configure", client.RequireScopeFunc(client.ScopeAdmin, h.handleConfigure))
+	mux.Handle("POST /api/configure", coreOrUser(client.ScopeAdmin, h.handleConfigure))
 }
 
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DefaultHealth)
+}
+
+// coreOrUser admits core itself (homebase calls the plugin with the API
+// token core gave it) or a user core vouches for who holds scope.
+func coreOrUser(scope client.Scope, handler http.HandlerFunc) http.Handler {
+	asUser := client.AuthMiddleware(client.RequireScopeFunc(scope, handler))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if client.IsSystemRequest(r) {
+			handler(w, r)
+			return
+		}
+		asUser.ServeHTTP(w, r)
+	})
 }
