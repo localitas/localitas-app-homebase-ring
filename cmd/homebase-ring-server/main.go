@@ -34,7 +34,7 @@ func main() {
 	app := &cli.Command{
 		Name:    "homebase-ring-server",
 		Usage:   "Ring device integration plugin for Homebase",
-		Version: version,
+		Version: version + " (" + commit + ")",
 		Commands: []*cli.Command{
 			serveCommand(),
 			authCommand(),
