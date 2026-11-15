@@ -3,24 +3,37 @@ package ring
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/localitas/localitas-go"
 )
 
 type AppHealth struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Icon        string `json:"icon"`
-	Version     string `json:"version"`
-	Status      string `json:"status"`
-	PluginType  string `json:"plugin_type"`
-	PluginFor   string `json:"plugin_for"`
+	Name        string   `json:"name"`
+	DisplayName string   `json:"display_name"`
+	Icon        string   `json:"icon"`
+	Version     string   `json:"version"`
+	Status      string   `json:"status"`
+	Provides    []string `json:"provides"`
 }
 
 var logger = slog.Default().With("component", "homebase-ring")
+
+// Homebase's plugin contract: the interface a plugin provides, and where it
+// hints homebase that its devices changed.
+const (
+	homebasePluginInterface = "homebase-devices/v1"
+	homebaseDevicesCache    = "homebase"
+	homebaseDevicesChannel  = "devices"
+	// ringPollInterval is how often the Ring account's devices are read:
+	// Ring's cloud pushes nothing to the plugin.
+	ringPollInterval = time.Minute
+)
 
 var DefaultHealth = AppHealth{
 	Name:        "homebase-ring",
@@ -28,8 +41,7 @@ var DefaultHealth = AppHealth{
 	Icon:        "bell",
 	Version:     "0.1.0",
 	Status:      "healthy",
-	PluginType:  "homebase-plugin",
-	PluginFor:   "homebase",
+	Provides:    []string{homebasePluginInterface},
 }
 
 type App struct {
@@ -72,7 +84,67 @@ func (a *App) Configure(ctx context.Context, vaultPublicID string) error {
 	a.RingClient = ringClient
 	a.configured = true
 
+	go a.hintDevicesChanged(context.Background())
 	return nil
+}
+
+// ringClient is the Ring account's client, nil until configured.
+func (a *App) ringClient() *RingClient {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.RingClient
+}
+
+// WatchDevices reads the Ring account's devices every ringPollInterval
+// (Ring's cloud pushes nothing) and hints homebase when they changed, until
+// ctx ends. Homebase reads them only when hinted.
+func (a *App) WatchDevices(ctx context.Context) {
+	ticker := time.NewTicker(ringPollInterval)
+	defer ticker.Stop()
+	last := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		if a.ringClient() == nil {
+			continue
+		}
+		devices, err := a.GetAllDevices(ctx)
+		if err != nil {
+			logger.Warn("ring devices not read", "error", err)
+			continue
+		}
+		if sig := devicesSignature(devices); sig != last {
+			last = sig
+			a.hintDevicesChanged(ctx)
+		}
+	}
+}
+
+// devicesSignature identifies a set of devices and their state, whatever
+// their order.
+func devicesSignature(devices []RingDevice) string {
+	sorted := append([]RingDevice(nil), devices...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	b, _ := json.Marshal(sorted)
+	return string(b)
+}
+
+// hintDevicesChanged tells homebase to read this plugin's devices again.
+func (a *App) hintDevicesChanged(ctx context.Context) {
+	if a.client == nil {
+		return
+	}
+	value, _ := json.Marshal(struct {
+		Plugin string `json:"plugin"`
+	}{DefaultHealth.Name})
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if _, err := a.client.Cache(homebaseDevicesCache).PubSub(homebaseDevicesChannel, client.PubSubOpts{MaxSize: 1000}).Publish(ctx, string(value)); err != nil {
+		logger.Warn("homebase not hinted of a device change", "error", err)
+	}
 }
 
 func (a *App) IsConfigured() bool {
@@ -81,13 +153,14 @@ func (a *App) IsConfigured() bool {
 	return a.configured
 }
 
-func (a *App) GetAllDevices(ctx context.Context) ([]RingDevice, error) {
-	a.mu.RLock()
-	rc := a.RingClient
-	a.mu.RUnlock()
+// errNotConfigured answers a device request before homebase has handed the
+// plugin its credential.
+var errNotConfigured = errors.New("not configured: no Ring account yet")
 
+func (a *App) GetAllDevices(ctx context.Context) ([]RingDevice, error) {
+	rc := a.ringClient()
 	if rc == nil {
-		return nil, nil
+		return nil, errNotConfigured
 	}
 
 	resp, err := rc.FetchDevices(ctx)
