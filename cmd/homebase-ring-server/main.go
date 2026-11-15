@@ -96,6 +96,8 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 		slog.Warn("service registry failed", "error", err)
 	}
 
+	announcement := c.Announce(ln)
+
 	shutdown, err := ring.BroadcastMDNS(addr.Port, ring.DefaultHealth.Name)
 	if err != nil {
 		slog.Warn("mDNS broadcast failed", "error", err)
@@ -106,6 +108,9 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
 		slog.Info("shutting down")
+		if err := announcement.Withdraw(); err != nil {
+			slog.Warn("withdraw from core failed", "error", err)
+		}
 		if shutdown != nil {
 			shutdown()
 		}
