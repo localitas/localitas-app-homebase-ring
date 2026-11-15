@@ -36,7 +36,7 @@ Note the `public_id` in the response — you'll need it in step 3.
 cd apps/homebase-ring && make start
 ```
 
-It starts unconfigured and broadcasts via mDNS. Homebase discovers it automatically.
+It starts unconfigured and announces itself to core. It also broadcasts via mDNS as a homebase plugin, so Homebase discovers it automatically.
 
 ### 3. Configure in Homebase UI
 
