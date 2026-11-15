@@ -36,7 +36,7 @@ Note the `public_id` in the response — you'll need it in step 3.
 cd apps/homebase-ring && make start
 ```
 
-It starts unconfigured and announces itself to core. It also broadcasts via mDNS as a homebase plugin, so Homebase discovers it automatically.
+It starts unconfigured and announces itself to core. Its `health.json` provides `homebase-devices/v1`, so Homebase takes it on as soon as core serves it. Once configured it reads the Ring account's devices every minute (Ring's cloud pushes nothing) and hints Homebase on the `homebase`/`devices` channel when they change; until then its device routes answer 503.
 
 ### 3. Configure in Homebase UI
 

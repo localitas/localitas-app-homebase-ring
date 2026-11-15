@@ -2,6 +2,7 @@ package ring
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -36,10 +37,29 @@ func (h *handler) handleConfigure(w http.ResponseWriter, r *http.Request) {
 func (h *handler) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	devices, err := h.app.GetAllDevices(r.Context())
 	if err != nil {
-		writeErr(w, r, http.StatusBadGateway, "failed to fetch devices: %v", err)
+		writeDevicesErr(w, r, err)
 		return
 	}
 	writeJSON(w, r, http.StatusOK, devices)
+}
+
+// writeDevicesErr answers a failed device read: 503 while the plugin has no
+// Ring account, 502 when Ring's cloud failed.
+func writeDevicesErr(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errNotConfigured) {
+		writeErr(w, r, http.StatusServiceUnavailable, "%v", err)
+		return
+	}
+	writeErr(w, r, http.StatusBadGateway, "failed to fetch devices: %v", err)
+}
+
+// configuredClient is the Ring account's client, or answers 503 itself.
+func (h *handler) configuredClient(w http.ResponseWriter, r *http.Request) *RingClient {
+	rc := h.app.ringClient()
+	if rc == nil {
+		writeErr(w, r, http.StatusServiceUnavailable, "%v", errNotConfigured)
+	}
+	return rc
 }
 
 func (h *handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +71,7 @@ func (h *handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 
 	devices, err := h.app.GetAllDevices(r.Context())
 	if err != nil {
-		writeErr(w, r, http.StatusBadGateway, "failed to fetch devices: %v", err)
+		writeDevicesErr(w, r, err)
 		return
 	}
 
@@ -71,7 +91,11 @@ func (h *handler) handleGetHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	health, err := h.app.RingClient.GetHealth(r.Context(), id)
+	rc := h.configuredClient(w, r)
+	if rc == nil {
+		return
+	}
+	health, err := rc.GetHealth(r.Context(), id)
 	if err != nil {
 		writeErr(w, r, http.StatusBadGateway, "health check failed: %v", err)
 		return
@@ -86,7 +110,11 @@ func (h *handler) handleGetSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.app.RingClient.GetSnapshot(r.Context(), id)
+	rc := h.configuredClient(w, r)
+	if rc == nil {
+		return
+	}
+	data, err := rc.GetSnapshot(r.Context(), id)
 	if err != nil {
 		writeErr(w, r, http.StatusBadGateway, "snapshot failed: %v", err)
 		return
@@ -114,35 +142,40 @@ func (h *handler) handleCommand(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusBadRequest, "command is required")
 		return
 	}
+	if !knownCommands[cmd.Command] {
+		writeErr(w, r, http.StatusBadRequest, "unknown command: %s", cmd.Command)
+		return
+	}
+	rc := h.configuredClient(w, r)
+	if rc == nil {
+		return
+	}
 
 	ctx := r.Context()
 	var cmdErr error
 
 	switch cmd.Command {
 	case "light_on":
-		cmdErr = h.app.RingClient.SetLight(ctx, id, true)
+		cmdErr = rc.SetLight(ctx, id, true)
 	case "light_off":
-		cmdErr = h.app.RingClient.SetLight(ctx, id, false)
+		cmdErr = rc.SetLight(ctx, id, false)
 	case "siren_on":
-		cmdErr = h.app.RingClient.SetSiren(ctx, id, true)
+		cmdErr = rc.SetSiren(ctx, id, true)
 	case "siren_off":
-		cmdErr = h.app.RingClient.SetSiren(ctx, id, false)
+		cmdErr = rc.SetSiren(ctx, id, false)
 	case "chime_play":
 		kind := "ding"
 		if k, ok := cmd.Arguments["kind"].(string); ok {
 			kind = k
 		}
-		cmdErr = h.app.RingClient.PlayChimeSound(ctx, id, kind)
+		cmdErr = rc.PlayChimeSound(ctx, id, kind)
 	case "chime_volume":
 		vol, ok := cmd.Arguments["volume"].(float64)
 		if !ok {
 			writeErr(w, r, http.StatusBadRequest, "volume argument required")
 			return
 		}
-		cmdErr = h.app.RingClient.SetChimeVolume(ctx, id, int(vol))
-	default:
-		writeErr(w, r, http.StatusBadRequest, "unknown command: %s", cmd.Command)
-		return
+		cmdErr = rc.SetChimeVolume(ctx, id, int(vol))
 	}
 
 	if cmdErr != nil {
@@ -150,6 +183,10 @@ func (h *handler) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusOK, CommandResponse{Success: true})
+}
+
+var knownCommands = map[string]bool{
+	"light_on": true, "light_off": true, "siren_on": true, "siren_off": true, "chime_play": true, "chime_volume": true,
 }
 
 func parseDeviceID(r *http.Request) (int64, error) {

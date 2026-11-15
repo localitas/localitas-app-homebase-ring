@@ -97,11 +97,7 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	announcement := c.Announce(ln)
-
-	shutdown, err := ring.BroadcastMDNS(addr.Port, ring.DefaultHealth.Name)
-	if err != nil {
-		slog.Warn("mDNS broadcast failed", "error", err)
-	}
+	go app.WatchDevices(ctx)
 
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -110,9 +106,6 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 		slog.Info("shutting down")
 		if err := announcement.Withdraw(); err != nil {
 			slog.Warn("withdraw from core failed", "error", err)
-		}
-		if shutdown != nil {
-			shutdown()
 		}
 		os.Exit(0)
 	}()
