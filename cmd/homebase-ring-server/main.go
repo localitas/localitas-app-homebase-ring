@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -112,6 +113,9 @@ func authCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "auth",
 		Usage: "Acquire a Ring refresh token via email/password login",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "core-url", Value: client.DefaultCoreURL(), Usage: "base URL of the Localitas core API, for the printed Vault command"},
+		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			reader := bufio.NewReader(os.Stdin)
 
@@ -151,19 +155,33 @@ func authCommand() *cli.Command {
 			fmt.Println()
 			fmt.Println("Successfully authenticated with Ring!")
 			fmt.Println()
-			fmt.Println("Refresh token:")
-			fmt.Println(token)
-			fmt.Println()
-			fmt.Println("Store this in Vault with key 'ring_refresh_token':")
-			fmt.Println()
-			fmt.Printf("  curl -X POST http://localhost:8080/apps/vault/api/credentials \\\n")
-			fmt.Printf("    -H \"Authorization: Bearer $(cat ~/.localitas/api-token)\" \\\n")
-			fmt.Printf("    -H \"Content-Type: application/json\" \\\n")
-			fmt.Printf("    -d '{\"name\": \"Ring\", \"data\": {\"ring_refresh_token\": \"%s\"}}'\n", token)
-			fmt.Println()
-			fmt.Println("Then configure the Vault public_id in Homebase UI under Plugins.")
+			fmt.Print(vaultStoreInstructions(cmd.String("core-url"), token))
 
 			return nil
 		},
 	}
+}
+
+type ringCredentialData struct {
+	RingRefreshToken string `json:"ring_refresh_token"`
+}
+
+type vaultCredentialRequest struct {
+	Name string             `json:"name"`
+	Data ringCredentialData `json:"data"`
+}
+
+func vaultStoreInstructions(coreURL, refreshToken string) string {
+	body, _ := json.Marshal(vaultCredentialRequest{Name: "Ring", Data: ringCredentialData{RingRefreshToken: refreshToken}})
+	var b strings.Builder
+	b.WriteString("Refresh token:\n")
+	b.WriteString(refreshToken + "\n\n")
+	b.WriteString("Store this in Vault with key 'ring_refresh_token':\n\n")
+	fmt.Fprintf(&b, "  curl -X POST %s/apps/vault/api/credentials \\\n", strings.TrimRight(coreURL, "/"))
+	b.WriteString("    -H \"Authorization: Bearer $LOCALITAS_API_TOKEN\" \\\n")
+	b.WriteString("    -H \"Content-Type: application/json\" \\\n")
+	fmt.Fprintf(&b, "    -d '%s'\n", strings.ReplaceAll(string(body), "'", `'\''`))
+	b.WriteString("\nLOCALITAS_API_TOKEN holds core's API token: core.auth.api_token in ~/.localitas/config-core.yaml.\n")
+	b.WriteString("Then configure the Vault public_id in Homebase UI under Plugins.\n")
+	return b.String()
 }

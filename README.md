@@ -12,7 +12,7 @@ make build
 ./bin/homebase-ring-server auth
 ```
 
-This prompts for your Ring email and password. If you have 2FA enabled (recommended), it will ask for the code sent to your phone or authenticator app. On success, it prints the refresh token and a `curl` command to store it in Vault. That printed command still uses port 8080 and a `~/.localitas/api-token` file; use the command in step 1 below instead.
+This prompts for your Ring email and password. If you have 2FA enabled (recommended), it will ask for the code sent to your phone or authenticator app. On success, it prints the refresh token and the `curl` command in step 1 below with the token filled in, aimed at core on `--core-url` (default `$CORE_URL`, else `http://localhost:8090`).
 
 The refresh token rotates automatically. Homebase-ring writes updated tokens back to Vault, so you only need to do this once.
 
