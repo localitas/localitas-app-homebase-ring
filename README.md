@@ -8,11 +8,11 @@ Ring uses OAuth2 with refresh tokens. Generate one using the built-in `auth` sub
 
 ```bash
 cd ~/localitas-app-homebase-ring
-go build -o bin/homebase-ring-server ./cmd/homebase-ring-server
+make build
 ./bin/homebase-ring-server auth
 ```
 
-This prompts for your Ring email and password. If you have 2FA enabled (recommended), it will ask for the code sent to your phone or authenticator app. On success, it prints the refresh token and a `curl` command to store it in Vault. That printed command still uses port 8080 and a `~/.localitas/api-token` file; use the command in step 1 below instead.
+This prompts for your Ring email and password. If you have 2FA enabled (recommended), it will ask for the code sent to your phone or authenticator app. On success, it prints the refresh token and the `curl` command in step 1 below with the token filled in, aimed at core on `--core-url` (default `$CORE_URL`, else `http://localhost:8090`).
 
 The refresh token rotates automatically. Homebase-ring writes updated tokens back to Vault, so you only need to do this once.
 
@@ -39,7 +39,7 @@ Note the `public_id` in the response — you'll need it in step 3.
 cd ~/localitas-app-homebase-ring && make start
 ```
 
-`make start` loads the launchd service `com.localitas.app.homebase-ring` for `bin/homebase-ring-server` (built above) on port 9223.
+`make start` builds `bin/homebase-ring-server`, writes the launchd service `com.localitas.app.homebase-ring` for it and loads it on port 9223.
 
 It starts unconfigured and announces itself to core. Its `health.json` provides `homebase-devices/v1`, so Homebase takes it on as soon as core serves it. Once configured it reads the Ring account's devices every minute (Ring's cloud pushes nothing) and hints Homebase on the `homebase`/`devices` channel when they change; until then its device routes answer 503.
 
