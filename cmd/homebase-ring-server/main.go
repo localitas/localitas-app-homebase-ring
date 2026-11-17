@@ -56,7 +56,7 @@ func serveCommand() *cli.Command {
 		Name:  "serve",
 		Usage: "Start the Ring plugin server",
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "listen", Value: ":0", Usage: "listen address"},
+			&cli.StringFlag{Name: "listen", Value: "127.0.0.1:0", Usage: "listen address (core reaches the app over loopback; a container passes :8000)"},
 			&cli.StringFlag{Name: "core-url", Value: client.DefaultCoreURL(), Usage: "base URL of the Localitas core API"},
 			&cli.StringFlag{Name: "base-path", Value: "/", Usage: "URL prefix"},
 			&cli.StringFlag{Name: "token", Value: envOrFileToken(), Usage: "bearer token"},
