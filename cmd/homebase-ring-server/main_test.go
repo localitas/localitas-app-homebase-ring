@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	client "github.com/localitas/localitas-go"
 	"github.com/urfave/cli/v3"
 )
 
@@ -106,12 +107,20 @@ func TestInstructionsNameWhereCoresAPITokenComesFrom(t *testing.T) {
 	}
 }
 
-func TestAuthCoreURLDefaultsToCoresPort(t *testing.T) {
+// Run natively, auth's --core-url defaults to the core of this machine: the
+// URL in the core.env core writes in its home (LOCALITAS_HOME).
+func TestAuthCoreURLDefaultsToTheCoreOfItsHome(t *testing.T) {
+	home := t.TempDir()
+	if err := client.WriteCoreEnv(home, "http://127.0.0.1:8190", "lt_node"); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("CORE_URL", "")
+	t.Setenv("LOCALITAS_API_TOKEN", "")
+	t.Setenv("LOCALITAS_HOME", home)
 	for _, f := range authCommand().Flags {
 		if sf, ok := f.(*cli.StringFlag); ok && sf.Name == "core-url" {
-			if sf.Value != "http://localhost:8090" {
-				t.Fatalf("core-url default = %q, want http://localhost:8090", sf.Value)
+			if sf.Value != "http://127.0.0.1:8190" {
+				t.Fatalf("core-url default = %q, want the URL in %s/core.env", sf.Value, home)
 			}
 			return
 		}
