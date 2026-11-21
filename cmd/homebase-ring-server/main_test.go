@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	client "github.com/localitas/localitas-go"
 	"github.com/urfave/cli/v3"
 )
 
@@ -93,22 +94,33 @@ func TestPrintedVaultCommandSendsValidJSONForAnyToken(t *testing.T) {
 
 func TestInstructionsNameWhereCoresAPITokenComesFrom(t *testing.T) {
 	text := vaultStoreInstructions("http://localhost:8090", "tok")
-	for _, want := range []string{"LOCALITAS_API_TOKEN", "core.auth.api_token", "~/.localitas/config-core.yaml"} {
+	for _, want := range []string{"LOCALITAS_API_TOKEN", ". ~/.localitas/core.env", "$LOCALITAS_HOME"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("instructions lack %q:\n%s", want, text)
 		}
+	}
+	if !strings.Contains(vaultStoreInstructions("", "tok"), "curl -X POST $CORE_URL/apps/vault/api/credentials") {
+		t.Errorf("with no core found the command does not take CORE_URL from core.env")
 	}
 	if strings.Contains(text, "api-token)") || strings.Contains(text, ":8080") {
 		t.Errorf("instructions still name the api-token file or port 8080:\n%s", text)
 	}
 }
 
-func TestAuthCoreURLDefaultsToCoresPort(t *testing.T) {
+// Run natively, auth's --core-url defaults to the core of this machine: the
+// URL in the core.env core writes in its home (LOCALITAS_HOME).
+func TestAuthCoreURLDefaultsToTheCoreOfItsHome(t *testing.T) {
+	home := t.TempDir()
+	if err := client.WriteCoreEnv(home, "http://127.0.0.1:8190", "lt_node"); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("CORE_URL", "")
+	t.Setenv("LOCALITAS_API_TOKEN", "")
+	t.Setenv("LOCALITAS_HOME", home)
 	for _, f := range authCommand().Flags {
 		if sf, ok := f.(*cli.StringFlag); ok && sf.Name == "core-url" {
-			if sf.Value != "http://localhost:8090" {
-				t.Fatalf("core-url default = %q, want http://localhost:8090", sf.Value)
+			if sf.Value != "http://127.0.0.1:8190" {
+				t.Fatalf("core-url default = %q, want the URL in %s/core.env", sf.Value, home)
 			}
 			return
 		}

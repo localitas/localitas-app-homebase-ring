@@ -12,7 +12,7 @@ make build
 ./bin/homebase-ring-server auth
 ```
 
-This prompts for your Ring email and password. If you have 2FA enabled (recommended), it will ask for the code sent to your phone or authenticator app. On success, it prints the refresh token and the `curl` command in step 1 below with the token filled in, aimed at core on `--core-url` (default `$CORE_URL`, else `http://localhost:8090`).
+This prompts for your Ring email and password. If you have 2FA enabled (recommended), it will ask for the code sent to your phone or authenticator app. On success, it prints the refresh token and the `curl` command in step 1 below with the token filled in, aimed at core on `--core-url` (default: the core the SDK's `client.DefaultCoreURL()` finds, see below).
 
 The refresh token rotates automatically. Homebase-ring writes updated tokens back to Vault, so you only need to do this once.
 
@@ -23,13 +23,14 @@ The refresh token rotates automatically. Homebase-ring writes updated tokens bac
 After running `auth`, store the refresh token:
 
 ```bash
-curl -X POST http://localhost:8090/apps/vault/api/credentials \
+. ~/.localitas/core.env
+curl -X POST "$CORE_URL/apps/vault/api/credentials" \
   -H "Authorization: Bearer $LOCALITAS_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "Ring", "data": {"ring_refresh_token": "YOUR_REFRESH_TOKEN_HERE"}}'
 ```
 
-`LOCALITAS_API_TOKEN` holds your API token. Core's token is `core.auth.api_token` in `~/.localitas/config-core.yaml`; homebase-ring and the Localitas SDKs read it from there automatically when the variable is unset.
+homebase-ring reaches core through the SDK's `client.DefaultCoreURL()` and `client.DefaultToken()`: `CORE_URL` and `LOCALITAS_API_TOKEN` from the environment (core sets both for an App Store container), else from the `core.env` core writes in its home each time it serves (`$LOCALITAS_HOME/core.env`, else `~/.localitas/core.env`). `make start` passes `LOCALITAS_HOME` (default `~/.localitas`) to the launchd service and refuses to install while that `core.env` is missing. Sourcing `core.env`, as above, puts both in your shell; for another core, source the `core.env` in its home.
 
 Note the `public_id` in the response — you'll need it in step 3.
 

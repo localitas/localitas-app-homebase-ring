@@ -177,11 +177,14 @@ func vaultStoreInstructions(coreURL, refreshToken string) string {
 	b.WriteString("Refresh token:\n")
 	b.WriteString(refreshToken + "\n\n")
 	b.WriteString("Store this in Vault with key 'ring_refresh_token':\n\n")
+	if coreURL == "" {
+		coreURL = "$CORE_URL"
+	}
 	fmt.Fprintf(&b, "  curl -X POST %s/apps/vault/api/credentials \\\n", strings.TrimRight(coreURL, "/"))
 	b.WriteString("    -H \"Authorization: Bearer $LOCALITAS_API_TOKEN\" \\\n")
 	b.WriteString("    -H \"Content-Type: application/json\" \\\n")
 	fmt.Fprintf(&b, "    -d '%s'\n", strings.ReplaceAll(string(body), "'", `'\''`))
-	b.WriteString("\nLOCALITAS_API_TOKEN holds core's API token: core.auth.api_token in ~/.localitas/config-core.yaml.\n")
+	b.WriteString("\nLOCALITAS_API_TOKEN holds core's API token: run `. ~/.localitas/core.env` first (core writes it there,\nwith CORE_URL; another core: the core.env in its $LOCALITAS_HOME).\n")
 	b.WriteString("Then configure the Vault public_id in Homebase UI under Plugins.\n")
 	return b.String()
 }
