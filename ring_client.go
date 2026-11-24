@@ -196,24 +196,43 @@ func (c *RingClient) PlayChimeSound(ctx context.Context, deviceID int64, kind st
 	return err
 }
 
+// doRequest calls Ring's API. A refused access token is refreshed and the
+// call made once more; refused again, the call fails with Ring's 401.
 func (c *RingClient) doRequest(ctx context.Context, method, url string, body interface{}) ([]byte, error) {
-	token, err := c.auth.GetAccessToken(ctx)
+	status, data, err := c.send(ctx, method, url, body)
+	if err == nil && status == http.StatusUnauthorized {
+		c.auth.clearAccessToken()
+		status, data, err = c.send(ctx, method, url, body)
+	}
 	if err != nil {
 		return nil, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, fmt.Errorf("ring API %s %s returned %d: %s", method, url, status, string(data))
+	}
+	return data, nil
+}
+
+// send makes one call with the current access token and returns Ring's
+// status and body.
+func (c *RingClient) send(ctx context.Context, method, url string, body interface{}) (int, []byte, error) {
+	token, err := c.auth.GetAccessToken(ctx)
+	if err != nil {
+		return 0, nil, err
 	}
 
 	var bodyReader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 		bodyReader = bytes.NewReader(b)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -225,25 +244,15 @@ func (c *RingClient) doRequest(ctx context.Context, method, url string, body int
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("ring request %s %s: %w", method, url, err)
+		return 0, nil, fmt.Errorf("ring request %s %s: %w", method, url, err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return 0, nil, fmt.Errorf("read response: %w", err)
 	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		c.auth.clearAccessToken()
-		return c.doRequest(ctx, method, url, body)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("ring API %s %s returned %d: %s", method, url, resp.StatusCode, string(data))
-	}
-
-	return data, nil
+	return resp.StatusCode, data, nil
 }
 
 func jsonReader(b []byte) io.Reader {
