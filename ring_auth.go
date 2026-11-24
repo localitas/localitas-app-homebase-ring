@@ -32,11 +32,13 @@ type oauthTokenResponse struct {
 }
 
 type RingAuth struct {
-	mu             sync.RWMutex
-	config         *authConfig
-	accessToken    string
-	expiresAt      time.Time
-	hardwareID     string
+	mu          sync.RWMutex
+	config      *authConfig
+	accessToken string
+	expiresAt   time.Time
+	hardwareID  string
+	// tokenURL is where access tokens are refreshed: Ring's OAuth endpoint.
+	tokenURL       string
 	httpClient     *http.Client
 	vaultClient    *client.Client
 	vaultPublicID  string
@@ -48,6 +50,7 @@ func NewRingAuth(vaultClient *client.Client, vaultPublicID, vaultSecretKey, hard
 		vaultSecretKey = "ring_refresh_token"
 	}
 	return &RingAuth{
+		tokenURL:       oauthURL,
 		httpClient:     &http.Client{Timeout: 20 * time.Second},
 		vaultClient:    vaultClient,
 		vaultPublicID:  vaultPublicID,
@@ -128,7 +131,7 @@ func (a *RingAuth) refreshAccessToken(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, oauthURL, jsonReader(bodyJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.tokenURL, jsonReader(bodyJSON))
 	if err != nil {
 		return "", err
 	}
