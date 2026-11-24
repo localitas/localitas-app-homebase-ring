@@ -164,18 +164,13 @@ func (h *handler) handleCommand(w http.ResponseWriter, r *http.Request) {
 	case "siren_off":
 		cmdErr = rc.SetSiren(ctx, id, false)
 	case "chime_play":
-		kind := "ding"
-		if k, ok := cmd.Arguments["kind"].(string); ok {
-			kind = k
-		}
-		cmdErr = rc.PlayChimeSound(ctx, id, kind)
+		cmdErr = rc.PlayChimeSound(ctx, id, cmd.Arguments.Kind)
 	case "chime_volume":
-		vol, ok := cmd.Arguments["volume"].(float64)
-		if !ok {
+		if cmd.Arguments.Volume == nil {
 			writeErr(w, r, http.StatusBadRequest, "volume argument required")
 			return
 		}
-		cmdErr = rc.SetChimeVolume(ctx, id, int(vol))
+		cmdErr = rc.SetChimeVolume(ctx, id, int(*cmd.Arguments.Volume))
 	}
 
 	if cmdErr != nil {

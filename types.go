@@ -1,21 +1,26 @@
 package ring
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
+// CameraData is a camera in Ring's ring_devices answer. Features and
+// Settings are Ring's own open-shaped objects, kept as sent and not read.
 type CameraData struct {
-	ID          int64                  `json:"id"`
-	Description string                 `json:"description"`
-	DeviceID    string                 `json:"device_id"`
-	Kind        string                 `json:"kind"`
-	LocationID  string                 `json:"location_id"`
-	Address     string                 `json:"address"`
-	Features    map[string]interface{} `json:"features"`
-	Firmware    string                 `json:"firmware_version"`
-	LEDStatus   string                 `json:"led_status"`
-	BatteryLife interface{}            `json:"battery_life"`
-	SirenStatus *SirenStatus           `json:"siren_status"`
-	Settings    map[string]interface{} `json:"settings"`
-	Alerts      *Alerts                `json:"alerts"`
+	ID          int64           `json:"id"`
+	Description string          `json:"description"`
+	DeviceID    string          `json:"device_id"`
+	Kind        string          `json:"kind"`
+	LocationID  string          `json:"location_id"`
+	Address     string          `json:"address"`
+	Features    json.RawMessage `json:"features"`
+	Firmware    string          `json:"firmware_version"`
+	LEDStatus   string          `json:"led_status"`
+	BatteryLife interface{}     `json:"battery_life"`
+	SirenStatus *SirenStatus    `json:"siren_status"`
+	Settings    json.RawMessage `json:"settings"`
+	Alerts      *Alerts         `json:"alerts"`
 }
 
 type SirenStatus struct {
@@ -78,8 +83,15 @@ type RingDevice struct {
 }
 
 type CommandRequest struct {
-	Command   string                 `json:"command"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
+	Command   string           `json:"command"`
+	Arguments CommandArguments `json:"arguments"`
+}
+
+// CommandArguments are the arguments a command takes: chime_play's sound
+// kind and chime_volume's volume (0-11).
+type CommandArguments struct {
+	Kind   string   `json:"kind"`
+	Volume *float64 `json:"volume"`
 }
 
 type CommandResponse struct {

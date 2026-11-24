@@ -31,19 +31,53 @@ func NewRingClient(auth *RingAuth) *RingClient {
 }
 
 func (c *RingClient) CreateSession(ctx context.Context) error {
-	body := map[string]interface{}{
-		"device": map[string]interface{}{
-			"hardware_id": c.auth.GetHardwareID(),
-			"metadata": map[string]interface{}{
-				"api_version":  apiVersion,
-				"device_model": "homebase-ring",
-			},
-			"os": "android",
-		},
-	}
-
-	_, err := c.doRequest(ctx, http.MethodPost, clientAPIBase+"session", body)
+	_, err := c.doRequest(ctx, http.MethodPost, clientAPIBase+"session", newSessionRequest(c.auth.GetHardwareID()))
 	return err
+}
+
+// sessionRequest is POST clients_api/session's body. Fields are in key
+// order, as the map this replaced marshaled them.
+type sessionRequest struct {
+	Device sessionDevice `json:"device"`
+}
+
+type sessionDevice struct {
+	HardwareID string          `json:"hardware_id"`
+	Metadata   sessionMetadata `json:"metadata"`
+	OS         string          `json:"os"`
+}
+
+type sessionMetadata struct {
+	APIVersion  int    `json:"api_version"`
+	DeviceModel string `json:"device_model"`
+}
+
+func newSessionRequest(hardwareID string) sessionRequest {
+	return sessionRequest{Device: sessionDevice{
+		HardwareID: hardwareID,
+		Metadata:   sessionMetadata{APIVersion: apiVersion, DeviceModel: "homebase-ring"},
+		OS:         "android",
+	}}
+}
+
+// chimeVolumeRequest is PUT clients_api/chimes/{id}'s body.
+type chimeVolumeRequest struct {
+	Chime struct {
+		Settings struct {
+			Volume int `json:"volume"`
+		} `json:"settings"`
+	} `json:"chime"`
+}
+
+func newChimeVolumeRequest(volume int) chimeVolumeRequest {
+	var body chimeVolumeRequest
+	body.Chime.Settings.Volume = volume
+	return body
+}
+
+// chimeSoundRequest is POST clients_api/chimes/{id}/play_sound's body.
+type chimeSoundRequest struct {
+	Kind string `json:"kind"`
 }
 
 type RingDevicesResponse struct {
@@ -150,14 +184,7 @@ func (c *RingClient) GetChimeHealth(ctx context.Context, deviceID int64) (*Devic
 }
 
 func (c *RingClient) SetChimeVolume(ctx context.Context, deviceID int64, volume int) error {
-	body := map[string]interface{}{
-		"chime": map[string]interface{}{
-			"settings": map[string]interface{}{
-				"volume": volume,
-			},
-		},
-	}
-	_, err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("%schimes/%d", clientAPIBase, deviceID), body)
+	_, err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("%schimes/%d", clientAPIBase, deviceID), newChimeVolumeRequest(volume))
 	return err
 }
 
@@ -165,10 +192,7 @@ func (c *RingClient) PlayChimeSound(ctx context.Context, deviceID int64, kind st
 	if kind == "" {
 		kind = "ding"
 	}
-	body := map[string]interface{}{
-		"kind": kind,
-	}
-	_, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("%schimes/%d/play_sound", clientAPIBase, deviceID), body)
+	_, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("%schimes/%d/play_sound", clientAPIBase, deviceID), chimeSoundRequest{Kind: kind})
 	return err
 }
 
